@@ -68,6 +68,45 @@ def _analyze_feature(
             'candidates': []
         }
     
+    # Skip non-numeric string columns (like IDs)
+    if data.dtype == 'object':
+        # Try to convert to numeric
+        try:
+            data_numeric = pd.to_numeric(data, errors='coerce')
+            # If too many NaN after conversion, treat as categorical
+            if data_numeric.isna().sum() / len(data) > 0.5:
+                return {
+                    'feature': col_name,
+                    'data_type': 'categorical/text',
+                    'best_distribution': 'Categorical',
+                    'parameters': {'unique_values': data.nunique()},
+                    'goodness_of_fit': 0,
+                    'candidates': ['Categorical (text/ID field)']
+                }
+            # Use numeric version if conversion worked
+            data = data_numeric.dropna()
+        except:
+            # Pure text column
+            return {
+                'feature': col_name,
+                'data_type': 'categorical/text',
+                'best_distribution': 'Categorical',
+                'parameters': {'unique_values': data.nunique()},
+                'goodness_of_fit': 0,
+                'candidates': ['Categorical (text/ID field)']
+            }
+    
+    # Ensure we have enough data
+    if len(data) < 10:
+        return {
+            'feature': col_name,
+            'data_type': 'insufficient_data',
+            'best_distribution': 'N/A',
+            'parameters': {},
+            'goodness_of_fit': np.inf,
+            'candidates': ['Not enough data points']
+        }
+    
     # Detect data type
     data_type, is_discrete = _detect_data_type(data, max_categories)
     
@@ -291,14 +330,14 @@ if __name__ == "__main__":
     # Create sample data
     np.random.seed(42)
     
-    sample_df = pd.DataFrame({
-        'binary_feature': np.random.choice([0, 1], 1000, p=[0.3, 0.7]),
-        'count_feature': np.random.poisson(5, 1000),
-        'continuous_normal': np.random.normal(100, 15, 1000),
-        'continuous_lognormal': np.random.lognormal(3, 0.5, 1000),
-        'proportion': np.random.beta(2, 5, 1000),
-        'overdispersed_count': np.random.negative_binomial(5, 0.3, 1000),
-    })
+    # sample_df = pd.DataFrame({
+    #     'binary_feature': np.random.choice([0, 1], 1000, p=[0.3, 0.7]),
+    #     'count_feature': np.random.poisson(5, 1000),
+    #     'continuous_normal': np.random.normal(100, 15, 1000),
+    #     'continuous_lognormal': np.random.lognormal(3, 0.5, 1000),
+    #     'proportion': np.random.beta(2, 5, 1000),
+    #     'overdispersed_count': np.random.negative_binomial(5, 0.3, 1000),
+    # })
     
     # Find distributions
     dist_results = find_distributions(sample_df, top_n=3)
